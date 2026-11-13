@@ -29,8 +29,7 @@ object ResticMetaTags {
 
     /** 规整备注：去掉换行与首尾空白，并截断到 [REMARK_MAX_LENGTH]。 */
     fun normalizeRemark(remark: String): String =
-        remark.replace('
-', ' ').replace('', ' ').trim().take(REMARK_MAX_LENGTH)
+        remark.lines().joinToString(" ").trim().take(REMARK_MAX_LENGTH)
 
     fun versionTag(versionName: String, versionCode: Long): String =
         "$VERSION_PREFIX$versionCode:${encode(versionName)}"
