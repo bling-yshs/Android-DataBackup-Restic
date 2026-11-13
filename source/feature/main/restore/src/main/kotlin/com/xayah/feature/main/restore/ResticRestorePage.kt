@@ -336,7 +336,8 @@ fun ResticRestorePage(
                             val q = searchText.lowercase()
                             currentState.groups.filter { g ->
                                 g.appLabel.lowercase().contains(q) ||
-                                        g.packageName.lowercase().contains(q)
+                                        g.packageName.lowercase().contains(q) ||
+                                        g.remark.lowercase().contains(q)
                             }
                         }
 
@@ -616,6 +617,16 @@ fun ResticBackupGroupItem(
                     maxLines = 1
                 )
 
+                // 「版本名 · 备注」：来自 config 快照的附加 tag，两者都没有时不占行
+                val metaLine = group.metaLine
+                if (metaLine.isNotEmpty()) {
+                    BodyMediumText(
+                        text = metaLine,
+                        color = ThemedColorSchemeKeyTokens.Outline.value,
+                        maxLines = 1
+                    )
+                }
+
                 BodyMediumText(
                     text = DateUtil.formatTimestamp(
                         group.timestamp,
@@ -768,6 +779,16 @@ fun ResticAppGroupItem(
                         color = ThemedColorSchemeKeyTokens.Outline.value,
                         maxLines = 1
                     )
+
+                    // 聚合行展示最新一次备份的「版本名 · 备注」
+                    val metaLine = latest.metaLine
+                    if (metaLine.isNotEmpty()) {
+                        BodyMediumText(
+                            text = metaLine,
+                            color = ThemedColorSchemeKeyTokens.Outline.value,
+                            maxLines = 1
+                        )
+                    }
 
                     BodyMediumText(
                         text = DateUtil.formatTimestamp(

@@ -27,13 +27,17 @@ import com.xayah.core.datastore.readKillAppOption
 import com.xayah.core.datastore.saveKillAppOption
 import com.xayah.core.model.KillAppOption
 import com.xayah.core.model.util.indexOf
+import com.xayah.core.ui.component.Clickable
 import com.xayah.core.ui.component.InnerBottomSpacer
 import com.xayah.core.ui.component.LocalSlotScope
 import com.xayah.core.ui.component.Selectable
 import com.xayah.core.ui.component.Switchable
 import com.xayah.core.ui.component.select
 import com.xayah.core.ui.model.DialogRadioItem
+import com.xayah.core.ui.route.MainRoutes
 import com.xayah.core.ui.token.SizeTokens
+import com.xayah.core.ui.util.LocalNavController
+import com.xayah.core.util.navigateSingle
 import com.xayah.feature.main.settings.R
 import com.xayah.feature.main.settings.SettingsScaffold
 
@@ -43,6 +47,7 @@ import com.xayah.feature.main.settings.SettingsScaffold
 @Composable
 fun PageRestoreSettings() {
     val context = LocalContext.current
+    val navController = LocalNavController.current!!
     val dialogState = LocalSlotScope.current!!.dialogSlot
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
@@ -101,6 +106,14 @@ fun PageRestoreSettings() {
                     title = stringResource(id = R.string.restore_ssaid),
                     checkedText = stringResource(id = R.string.restore_ssaid_desc),
                 )
+
+                // 为旧版本创建的备份补上「版本」tag，使其在恢复列表中显示版本
+                Clickable(
+                    title = stringResource(id = R.string.restore_meta_migration),
+                    value = stringResource(id = R.string.restore_meta_migration_desc),
+                ) {
+                    navController.navigateSingle(MainRoutes.ResticMetaMigration.route)
+                }
             }
             InnerBottomSpacer(innerPadding = it)
         }

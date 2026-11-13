@@ -68,4 +68,21 @@
     <string name="restore_group_backup_count">共 %1$d 个备份</string>
     <string name="restore_user_id">分身用户ID %1$d</string>
     <string name="restore_user_all">全部用户</string>
+    <string name="restore_backup_info">备份信息</string>
+    <string name="restore_app_version">应用版本</string>
+    <string name="restore_app_version_unknown">未记录。旧备份可在 设置 → 恢复设置 中迁移补全。</string>
+    <string name="restore_remark">备注</string>
+    <string name="restore_remark_empty">未填写备注，点击添加</string>
+    <string name="restore_remark_desc">最多 %1$d 字，留空则删除备注</string>
+    <string name="restore_remark_saving">正在保存…</string>
+    <string name="restore_remark_save_failed">备注保存失败</string>
+    <string name="restore_meta_migration">迁移旧备份数据</string>
+    <string name="restore_meta_migration_hint">旧版本创建的备份没有记录应用版本。选择应用后，会从它的每个完整备份中读出版本并写到快照上，之后恢复列表即可显示。不会改动备份数据本身。</string>
+    <string name="restore_meta_migration_empty">没有需要迁移的备份</string>
+    <string name="restore_meta_migration_not_configured">尚未配置本地仓库</string>
+    <string name="restore_meta_migration_pending">%1$d 个备份待迁移</string>
+    <string name="restore_meta_migration_start">迁移 %1$d 个应用</string>
+    <string name="restore_meta_migration_running">正在迁移 %1$d/%2$d：%3$s</string>
+    <string name="restore_meta_migration_result">完成：成功 %1$d 个，失败 %2$d 个</string>
+    <string name="restore_meta_migration_select_all">全选</string>
 </resources>

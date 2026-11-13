@@ -26,6 +26,7 @@ import com.xayah.core.data.repository.ResticRepoLocator
 import com.xayah.core.model.DataType
 import com.xayah.core.model.ResticProgressState
 import com.xayah.core.model.restic.ResticBackupApp
+import com.xayah.core.model.restic.ResticMetaTags
 import com.xayah.core.model.restic.ResticRestoreQueueItem
 import com.xayah.core.restic.ResticRepository
 import com.xayah.core.restic.ResticShared
@@ -476,6 +477,43 @@ class ResticRestoreViewModel @Inject constructor(
             packageInfo.applicationInfo?.loadLabel(pm)?.toString() ?: packageName
         } catch (e: Exception) {
             packageName
+        }
+    }
+
+    /**
+     * 修改某次备份的备注（空串 = 删除备注）。备注以 tag 形式贴在 config 快照上，
+     * 改 tag 会让该快照 ID 变化，因此返回替换了新 ID / 新 tag 的 group；失败返回 null。
+     */
+    suspend fun updateRemark(group: ResticBackupGroup, remark: String): ResticBackupGroup? = withContext(Dispatchers.IO) {
+        try {
+            reassertActiveIsOtg()
+            val (repoPath, password) = resolveRestoreRepo() ?: return@withContext null
+            val config = group.configBackup ?: return@withContext null
+            val remarkTag = ResticMetaTags.remarkTag(remark)
+
+            val newId = resticRepo.modifySnapshotTags(
+                repoPath = repoPath,
+                password = password,
+                snapshotId = config.snapshotId,
+                removePrefixes = listOf(ResticMetaTags.REMARK_PREFIX),
+                addTags = listOfNotNull(remarkTag),
+            ) ?: return@withContext null
+
+            val newTags = config.tags.filterNot { it.startsWith(ResticMetaTags.REMARK_PREFIX) } + listOfNotNull(remarkTag)
+            val updated = group.copy(
+                backups = group.backups.map {
+                    if (it.dataType == DataType.PACKAGE_CONFIG && it.snapshotId == config.snapshotId) {
+                        it.copy(snapshotId = newId, tags = newTags)
+                    } else it
+                }
+            )
+            // 立刻重建持久缓存：列表返回时先读缓存秒开，不能让它读到已失效的旧快照 ID
+            runCatching { refreshAndListApps(repoPath, password) }
+                .onFailure { Log.w(TAG, "updateRemark: 重建列表缓存失败: ${it.message}") }
+            updated
+        } catch (e: Exception) {
+            Log.e(TAG, "updateRemark 失败: ${e.message}", e)
+            null
         }
     }
 

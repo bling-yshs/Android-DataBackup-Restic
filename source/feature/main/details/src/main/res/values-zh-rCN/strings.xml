@@ -2,4 +2,7 @@
 <resources>
     <string name="snapshot_time">快照时间</string>
     <string name="snapshot_id">快照id</string>
+    <string name="backup_remark">备注</string>
+    <string name="backup_remark_empty">未填写备注</string>
+    <string name="backup_remark_desc">仅随下一次备份保存（最多 %1$d 字），备份成功后自动清空</string>
 </resources>

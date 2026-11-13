@@ -12,7 +12,7 @@ use crate::jni_progress::JniProgressCallback;
 use crate::repository::{
     check_repository, create_snapshot, create_snapshot_from_fd_with_progress,
     create_snapshot_with_progress, forget_snapshot, get_version, init_repository,
-    list_snapshots_db, prune_repository, repository_config_id, repository_exists,
+    list_snapshots_db, modify_snapshot_tags, prune_repository, repository_config_id, repository_exists,
     restore_snapshot, restore_snapshot_with_progress, set_extra_verify, validate_repository,
 };
 use crate::opendal_ops::{opendal_create_dir, opendal_list};
@@ -375,6 +375,38 @@ pub extern "system" fn Java_com_xayah_libnative_Rustic_nativeForgetSnapshot<'loc
                 &snapshot_id.to_string(),
             )
             .map_err(NativeError::from)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_xayah_libnative_Rustic_nativeModifySnapshotTags<'local>(
+    mut unowned_env: EnvUnowned<'local>,
+    _this: JObject<'local>,
+    repository_path: JString<'local>,
+    password: JString<'local>,
+    option_keys: JObjectArray<'local, JString<'local>>,
+    option_values: JObjectArray<'local, JString<'local>>,
+    snapshot_id: JString<'local>,
+    remove_prefixes: JObjectArray<'local, JString<'local>>,
+    add_tags: JObjectArray<'local, JString<'local>>,
+) -> JString<'local> {
+    unowned_env
+        .with_env(|env| -> Result<JString<'local>, NativeError> {
+            let options = string_arrays_to_map(env, &option_keys, &option_values)?;
+            let remove_prefixes = string_array_to_vec(env, &remove_prefixes)?;
+            let add_tags = string_array_to_vec(env, &add_tags)?;
+            let new_id = modify_snapshot_tags(
+                &repository_path.to_string(),
+                &password.to_string(),
+                &options,
+                &snapshot_id.to_string(),
+                &remove_prefixes,
+                &add_tags,
+            )
+            .map_err(NativeError::from)?;
+
+            env.new_string(new_id).map_err(NativeError::from)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

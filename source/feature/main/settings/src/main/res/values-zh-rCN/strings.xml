@@ -144,4 +144,6 @@
     <string name="diagnostic_log_verdict_self_kill">主动退出</string>
     <string name="diagnostic_log_verdict_app_crash">应用自身崩溃</string>
     <string name="diagnostic_log_verdict_unknown">未知</string>
+    <string name="restore_meta_migration">迁移旧备份数据</string>
+    <string name="restore_meta_migration_desc">为旧版本创建的本地备份补上应用版本信息</string>
 </resources>

@@ -20,6 +20,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.xayah.core.model.restic.ResticMetaTags
+import com.xayah.core.ui.component.edit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -53,9 +61,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun ResticBackupDetailPage(
     navController: NavController,
-    group: ResticBackupGroup,
+    initialGroup: ResticBackupGroup,
     viewModel: ResticRestoreViewModel = hiltViewModel()
 ) {
+    // 改备注会让 config 快照 ID 变化，页面内持有可更新的 group
+    var group by remember { mutableStateOf(initialGroup) }
+    var isSavingRemark by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val remarkTitle = stringResource(R.string.restore_remark)
+    val remarkDesc = stringResource(R.string.restore_remark_desc, ResticMetaTags.REMARK_MAX_LENGTH)
+    val remarkFailedText = stringResource(R.string.restore_remark_save_failed)
+    val hasConfig = group.configBackup != null
     val resticProgress by viewModel.resticProgress.collectAsStateWithLifecycle()
     val dialogState = LocalSlotScope.current!!.dialogSlot
     val coroutineScope = rememberCoroutineScope()
@@ -63,7 +79,7 @@ fun ResticBackupDetailPage(
     val confirmDeleteText = stringResource(R.string.restore_confirm_delete_local_app, group.backups.size)
     // 删除状态
     val isDeleting = resticProgress.isDeleting
-    val deleteButtonEnabled = !isDeleting
+    val deleteButtonEnabled = !isDeleting && !isSavingRemark
 
     // 删除进度相关变量
     val totalSnapshots = group.backups.size
@@ -223,6 +239,75 @@ fun ResticBackupDetailPage(
                         ),
                         color = ThemedColorSchemeKeyTokens.Outline.value
                     )
+                }
+            }
+
+            // 版本与备注：只针对完整备份（有 config 快照），信息来自 config 快照的附加 tag
+            if (hasConfig) {
+                Spacer(modifier = Modifier.height(SizeTokens.Level24))
+
+                Title(title = stringResource(R.string.restore_backup_info)) {
+                    Column(modifier = Modifier.padding(vertical = SizeTokens.Level8)) {
+                        Text(
+                            text = stringResource(R.string.restore_app_version),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = group.version?.let { (name, code) -> "$name ($code)" }
+                                ?: stringResource(R.string.restore_app_version_unknown),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = SizeTokens.Level4))
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isSavingRemark && !isDeleting) {
+                                val current = group.remark
+                                dialogState.edit(
+                                    title = remarkTitle,
+                                    defValue = current,
+                                    label = remarkTitle,
+                                    desc = remarkDesc,
+                                ) { input ->
+                                    val normalized = ResticMetaTags.normalizeRemark(input)
+                                    if (normalized != current) {
+                                        coroutineScope.launch {
+                                            isSavingRemark = true
+                                            val updated = viewModel.updateRemark(group, normalized)
+                                            isSavingRemark = false
+                                            if (updated != null) {
+                                                group = updated
+                                                // 快照 ID 已变：通知上一级列表强制刷新
+                                                navController.previousBackStackEntry
+                                                    ?.savedStateHandle
+                                                    ?.set("restic_needs_refresh", true)
+                                            } else {
+                                                Toast.makeText(context, remarkFailedText, Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(vertical = SizeTokens.Level8)
+                    ) {
+                        Text(
+                            text = remarkTitle,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = when {
+                                isSavingRemark -> stringResource(R.string.restore_remark_saving)
+                                group.remark.isNotEmpty() -> group.remark
+                                else -> stringResource(R.string.restore_remark_empty)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = SizeTokens.Level4))
+                    }
                 }
             }
 

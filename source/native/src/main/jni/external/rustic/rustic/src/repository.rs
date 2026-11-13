@@ -9,7 +9,8 @@ use std::os::unix::io::FromRawFd;
 use rustic_core::{
     BackupOptions, CheckOptions, ConfigOptions, Credentials, Excludes, FdSource, KeyOptions,
     LimitOption, LocalDestination, LsOptions, OpenStatus, PathList, PruneOptions, Repository,
-    RepositoryBackends, RepositoryOptions, RestoreOptions, SnapshotOptions, WriteBackend,
+    RepositoryBackends, RepositoryOptions, RestoreOptions, SnapshotOptions, StringList,
+    WriteBackend,
 };
 
 use crate::Result;
@@ -526,6 +527,72 @@ pub fn forget_snapshot(
     repo.delete_snapshots(&[snapshot.id])?;
 
     Ok(())
+}
+
+/// 修改既有快照的 tag：先删除所有以 `remove_prefixes` 中任一前缀开头的 tag，再追加 `add_tags`。
+///
+/// restic 快照文件以内容哈希为 ID，改 tag 即"写一份新快照文件 + 删旧快照文件"，
+/// 备份数据（tree / pack）完全不动，但快照 ID 会变。顺序固定为先写新、后删旧：
+/// 中途失败最坏只是新旧并存，不会丢快照。
+///
+/// 返回修改后的快照 ID；tag 集合没有变化时不做任何写入，原样返回旧 ID。
+/// 注意：`add_tags` 的每个元素按"一条完整 tag"处理，不会再按逗号拆分。
+pub fn modify_snapshot_tags(
+    repository_path: &str,
+    password: &str,
+    options: &HashMap<String, String>,
+    snapshot_id: &str,
+    remove_prefixes: &[String],
+    add_tags: &[String],
+) -> Result<String> {
+    let repo = open_repository(repository_path, password, options)?;
+    let mut snapshot = repo.get_snapshot_from_str(snapshot_id, |_| true)?;
+    let old_id = snapshot.id;
+
+    let to_remove: Vec<String> = snapshot
+        .tags
+        .iter()
+        .filter(|tag| remove_prefixes.iter().any(|prefix| tag.starts_with(prefix.as_str())))
+        .cloned()
+        .collect();
+
+    let mut changed = false;
+    if !to_remove.is_empty() {
+        let mut list = StringList::default();
+        for tag in to_remove {
+            list.add(tag);
+        }
+        changed |= snapshot.remove_tags(&[list]);
+    }
+    if !add_tags.is_empty() {
+        let mut list = StringList::default();
+        for tag in add_tags {
+            list.add(tag.clone());
+        }
+        changed |= snapshot.add_tags(vec![list]);
+    }
+
+    if !changed {
+        log::info!("[SnapshotTags] no change for snapshot {}", old_id);
+        return Ok(old_id.to_string());
+    }
+
+    let new_tags = snapshot.tags.clone();
+    let tree = snapshot.tree;
+    repo.save_snapshots(vec![snapshot])?;
+
+    // save_snapshots 不回传新 ID：按 tree + tag 集合在仓库里把刚写入的那份找出来。
+    let new_id = repo
+        .get_all_snapshots()?
+        .into_iter()
+        .find(|s| s.id != old_id && s.tree == tree && s.tags == new_tags)
+        .map(|s| s.id)
+        .ok_or("modified snapshot not found after saving")?;
+
+    repo.delete_snapshots(&[old_id])?;
+    log::info!("[SnapshotTags] snapshot {} -> {}", old_id, new_id);
+
+    Ok(new_id.to_string())
 }
 
 /// 改写既有仓库 config 文件中的 `extra_verify` 标志（不改 rustic_core 自身）。

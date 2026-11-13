@@ -1,5 +1,7 @@
 package com.xayah.core.service.packages.backup
 
+import com.xayah.core.datastore.BackupRemarkStore
+import com.xayah.core.model.restic.ResticMetaTags
 import android.util.Log
 import com.xayah.core.restic.ResticRepository
 import com.xayah.core.restic.ResticRepository.ResticProgressCallback
@@ -163,11 +165,18 @@ internal class BackupServiceCloudImpl @Inject constructor() : AbstractBackupServ
                     cloudEntity = mCloudEntity,
                     remotePath = mCloudEntity.remote,
                     filePath = configFile.absolutePath,
-                    tags = listOf(tag),
+                    // 主 tag + 版本 / 备注附加 tag（与本地备份一致，云端还原页暂不展示）
+                    tags = listOf(tag) + ResticMetaTags.build(
+                        versionName = p.packageInfo.versionName,
+                        versionCode = p.packageInfo.versionCode,
+                        remark = BackupRemarkStore.read(mContext, p.packageName, p.userId),
+                    ),
                     password = password,
                     cancelId = cancelId,
                 )
                 if (result.first == 0) {
+                    // 备注已随 config 快照固化，本次用完即清空；失败 / 取消则保留以便重试
+                    BackupRemarkStore.clear(mContext, p.packageName, p.userId)
                     val snapshotId = extractSnapshotIdFromJson(result.second)
                     if (snapshotId != null) updateCloudResticInfo(p.packageName, snapshotId, p.archivesRelativeDir)
                     t.update(dataType = type, state = OperationState.DONE, log = "config snapshot ok tag=$tag")

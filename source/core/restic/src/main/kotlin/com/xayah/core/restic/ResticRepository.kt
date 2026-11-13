@@ -406,6 +406,27 @@ class ResticRepository @Inject constructor(
         }
     }
 
+    /**
+     * 修改既有快照的 tag：先删除所有以 [removePrefixes] 中任一前缀开头的 tag，再追加 [addTags]。
+     * 快照数据不动，但快照 ID 会变；成功返回修改后的快照 ID，失败返回 null。
+     */
+    suspend fun modifySnapshotTags(
+        repoPath: String,
+        password: String,
+        snapshotId: String,
+        removePrefixes: List<String>,
+        addTags: List<String>,
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val result = rootService.modifyRusticSnapshotTags(repoPath, password, snapshotId, removePrefixes, addTags)
+            result.exceptionOrNull()?.let { Log.e(TAG, "修改快照 tag 失败: ${it.message}", it) }
+            result.getOrNull()?.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "修改快照 tag 异常: ${e.message}", e)
+            null
+        }
+    }
+
     suspend fun pruneRepository(
         repoPath: String,
         password: String

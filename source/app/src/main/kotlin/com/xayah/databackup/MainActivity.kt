@@ -83,6 +83,7 @@ import com.xayah.feature.main.settings.restic.ResticRepoPathScreen
 import com.xayah.feature.main.settings.restic.ResticPasswordScreen
 import com.xayah.feature.main.settings.restic.ResticInitializationScreen
 import com.xayah.feature.main.restore.ResticRestorePage
+import com.xayah.feature.main.restore.ResticMetaMigrationPage
 import com.xayah.feature.main.restore.ResticFilesRestorePage
 import com.xayah.feature.main.restore.ResticBackupDetailPage
 import dagger.hilt.android.AndroidEntryPoint
@@ -461,7 +462,7 @@ class MainActivity : AppCompatActivity() {
 
                             group?.let {
                                 // 4. 成功后导航到详情页
-                                ResticBackupDetailPage(navController = navController, group = it)
+                                ResticBackupDetailPage(navController = navController, initialGroup = it)
                             } ?: run {
                                 Log.e("MainActivity", "Group is null, popping back stack.")
                                 // 参数获取失败，返回上一页
@@ -589,6 +590,9 @@ class MainActivity : AppCompatActivity() {
                         }
                         composable(MainRoutes.RestoreSettings.route) {
                             PageRestoreSettings()
+                        }
+                        composable(MainRoutes.ResticMetaMigration.route) {
+                            ResticMetaMigrationPage()
                         }
                         composable(MainRoutes.LanguageSettings.route) {
                             PageLanguageSelector()

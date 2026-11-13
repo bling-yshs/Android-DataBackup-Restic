@@ -12,6 +12,8 @@ import com.xayah.core.data.repository.FilesRepo
 import com.xayah.core.data.repository.LabelsRepo
 import com.xayah.core.hiddenapi.castTo
 import com.xayah.core.model.OpType
+import com.xayah.core.datastore.BackupRemarkStore
+import com.xayah.core.model.restic.ResticMetaTags
 import com.xayah.core.model.Target
 import com.xayah.core.model.database.LabelAppCrossRefEntity
 import com.xayah.core.model.database.LabelEntity
@@ -186,6 +188,16 @@ class DetailsViewModel @Inject constructor(
                 else -> {}
             }
         }
+    }
+
+    fun readBackupRemark(app: PackageEntity): String =
+        BackupRemarkStore.read(context, app.packageName, app.userId)
+
+    /** 保存「下一次备份的备注」，返回规整（去换行、截断）后的实际内容。 */
+    fun saveBackupRemark(app: PackageEntity, remark: String): String {
+        val normalized = ResticMetaTags.normalizeRemark(remark)
+        BackupRemarkStore.save(context, app.packageName, app.userId, normalized)
+        return normalized
     }
 
     fun setDataStates(id: Long, dataStates: PackageDataStates) {

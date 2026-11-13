@@ -66,6 +66,7 @@ sealed class MainRoutes(val route: String) {
     data object BackupSettings : MainRoutes(route = "main_backup_settings")
     data object CompressionBenchmark : MainRoutes(route = "main_compression_benchmark")
     data object RestoreSettings : MainRoutes(route = "main_restore_settings")
+    data object ResticMetaMigration : MainRoutes(route = "main_restic_meta_migration")
     data object LanguageSettings : MainRoutes(route = "main_language_settings")
     data object BlackList : MainRoutes(route = "main_blacklist")
     data object ResticInitialization : MainRoutes(route = "main_settings_restic_initialization?${ARG_IS_OTG}={${ARG_IS_OTG}}&${ARG_REINITIALIZE}={${ARG_REINITIALIZE}}") {

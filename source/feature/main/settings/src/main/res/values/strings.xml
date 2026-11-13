@@ -146,4 +146,6 @@
     <string name="diagnostic_log_verdict_self_kill">Self exit</string>
     <string name="diagnostic_log_verdict_app_crash">App itself crashed</string>
     <string name="diagnostic_log_verdict_unknown">Unknown</string>
+    <string name="restore_meta_migration">Migrate old backups</string>
+    <string name="restore_meta_migration_desc">Add the app version to local backups made by older versions</string>
 </resources>

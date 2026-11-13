@@ -1371,6 +1371,29 @@ internal class RemoteRootServiceImpl(private val context: Context) : IRemoteRoot
         Rustic.forgetSnapshot(repositoryPath, password, snapshotId, options.toStringMap())
     }
 
+    override fun modifyRusticSnapshotTags(
+        repositoryPath: String,
+        password: String,
+        options: MutableMap<Any?, Any?>?,
+        snapshotId: String,
+        removePrefixes: MutableList<String>?,
+        addTags: MutableList<String>?,
+    ): String = synchronized(lock) {
+        try {
+            Rustic.modifySnapshotTags(
+                repositoryPath,
+                password,
+                snapshotId,
+                removePrefixes.orEmpty(),
+                addTags.orEmpty(),
+                options.toStringMap(),
+            )
+        } catch (e: Exception) {
+            Log.i("ResticRepository", "impl.modifyRusticSnapshotTags threw, msg=${e.message}")
+            throw IllegalStateException(e.message ?: "modifyRusticSnapshotTags failed")
+        }
+    }
+
     override fun pruneRusticRepository(repositoryPath: String, password: String, options: MutableMap<Any?, Any?>?, maxUnused: String, instantDelete: Boolean): Unit = synchronized(lock) {
         Rustic.pruneRepository(repositoryPath, password, maxUnused, options.toStringMap(), instantDelete)
     }

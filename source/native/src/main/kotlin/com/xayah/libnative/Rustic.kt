@@ -162,6 +162,30 @@ object Rustic {
         nativeForgetSnapshot(repositoryPath, password, optionKeys, optionValues, snapshotId)
     }
 
+    /**
+     * 修改既有快照的 tag：先删除所有以 [removePrefixes] 中任一前缀开头的 tag，再追加 [addTags]。
+     * 快照数据不动，但快照 ID 会变；返回修改后的快照 ID（无变化时返回原 ID）。
+     */
+    fun modifySnapshotTags(
+        repositoryPath: String,
+        password: String,
+        snapshotId: String,
+        removePrefixes: List<String>,
+        addTags: List<String>,
+        options: Map<String, String> = emptyMap(),
+    ): String {
+        val (optionKeys, optionValues) = options.toKeyValueArrays()
+        return nativeModifySnapshotTags(
+            repositoryPath,
+            password,
+            optionKeys,
+            optionValues,
+            snapshotId,
+            removePrefixes.toTypedArray(),
+            addTags.toTypedArray(),
+        )
+    }
+
     fun pruneRepository(
         repositoryPath: String,
         password: String,
@@ -300,6 +324,16 @@ object Rustic {
         optionValues: Array<String>,
         snapshotId: String,
     )
+
+    private external fun nativeModifySnapshotTags(
+        repositoryPath: String,
+        password: String,
+        optionKeys: Array<String>,
+        optionValues: Array<String>,
+        snapshotId: String,
+        removePrefixes: Array<String>,
+        addTags: Array<String>,
+    ): String
 
     private external fun nativePruneRepository(
         repositoryPath: String,

@@ -89,4 +89,6 @@ interface IRemoteRootService {
     String rcloneRpc(String method, String input);
     // 只读账务统计专用（core/stats、core/stats-reset）：不走 lock，可与 createRusticSnapshot 并发
     String rcloneRpcNoLock(String method, String input);
+    // 修改既有快照的 tag（先按前缀删、再追加），返回修改后的快照 ID
+    String modifyRusticSnapshotTags(String repositoryPath, String password, in Map options, String snapshotId, in List<String> removePrefixes, in List<String> addTags);
 }

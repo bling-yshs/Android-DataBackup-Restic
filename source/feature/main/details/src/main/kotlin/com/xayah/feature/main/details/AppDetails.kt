@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.RemoveRedEye
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Update
@@ -77,6 +78,7 @@ import com.xayah.core.ui.component.AnimatedModalDropdownMenu
 import com.xayah.core.ui.component.BodyLargeText
 import com.xayah.core.ui.component.BottomButton
 import com.xayah.core.ui.component.Clickable
+import com.xayah.core.model.restic.ResticMetaTags
 import com.xayah.core.ui.component.DataChips
 import com.xayah.core.ui.component.DropdownMenuItem
 import com.xayah.core.ui.component.HeadlineMediumText
@@ -169,6 +171,14 @@ internal fun AppDetails(
         Spacer(Modifier.height(SizeTokens.Level12))
 
         BackupParts(app = app, isCalculating = uiState.isRefreshing, onSetDataStates = onSetDataStates)
+
+        if (opType == OpType.BACKUP) {
+            // uiState.uuid 每次发射都会变：备份完成后回到本页时重新读取，已被清空的备注随之刷新
+            var remark by remember(uiState.uuid) { mutableStateOf(viewModel.readBackupRemark(app)) }
+            BackupRemark(remark = remark) {
+                remark = viewModel.saveBackupRemark(app, it)
+            }
+        }
 
         Info(app = uiState.app, snapshotDetail = snapshotDetail)
 
@@ -537,6 +547,24 @@ private fun BackupParts(app: PackageEntity, isCalculating: Boolean, onSetDataSta
             onSetDataStates(app.id, type.setSelected(app.dataStates, selected.not()))
         }
         Spacer(Modifier.height(SizeTokens.Level12))
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+private fun BackupRemark(remark: String, onSave: (String) -> Unit) {
+    val dialogState = LocalSlotScope.current!!.dialogSlot
+    val title = stringResource(id = R.string.backup_remark)
+    val desc = stringResource(id = R.string.backup_remark_desc, ResticMetaTags.REMARK_MAX_LENGTH)
+    Title(title = title) {
+        Clickable(
+            icon = Icons.Rounded.EditNote,
+            title = remark.ifEmpty { stringResource(id = R.string.backup_remark_empty) },
+            value = desc,
+            onClick = {
+                dialogState.edit(title = title, defValue = remark, label = title, desc = desc, onConfirm = onSave)
+            }
+        )
     }
 }
 

@@ -2,4 +2,7 @@
 <resources>
     <string name="snapshot_time">Snapshot time</string>
     <string name="snapshot_id">Snapshot id</string>
+    <string name="backup_remark">Remark</string>
+    <string name="backup_remark_empty">No remark</string>
+    <string name="backup_remark_desc">Saved with the next backup only (max %1$d characters), then cleared automatically</string>
 </resources>

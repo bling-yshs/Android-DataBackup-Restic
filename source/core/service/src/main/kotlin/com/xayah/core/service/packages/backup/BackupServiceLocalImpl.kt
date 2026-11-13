@@ -1,5 +1,7 @@
 package com.xayah.core.service.packages.backup
 
+import com.xayah.core.datastore.BackupRemarkStore
+import com.xayah.core.model.restic.ResticMetaTags
 import android.util.Log
 import android.os.SystemClock
 import com.xayah.core.data.repository.PackageRepository
@@ -83,10 +85,17 @@ internal class BackupServiceLocalImpl @Inject constructor() : AbstractBackupServ
                     repoPath = repoPath,
                     password = password,
                     filePath = configFile.absolutePath,
-                    tags = listOf(tag),
+                    // 主 tag + 版本 / 备注附加 tag（供还原列表免解 config 直接展示）
+                    tags = listOf(tag) + ResticMetaTags.build(
+                        versionName = p.packageInfo.versionName,
+                        versionCode = p.packageInfo.versionCode,
+                        remark = BackupRemarkStore.read(mContext, p.packageName, p.userId),
+                    ),
                     cancelId = cancelId,
                 )
                 if (result.first == 0) {
+                    // 备注已随 config 快照固化，本次用完即清空；失败 / 取消则保留以便重试
+                    BackupRemarkStore.clear(mContext, p.packageName, p.userId)
                     t.update(dataType = type, state = OperationState.DONE, log = "config snapshot ok tag=$tag")
                     log { "[FdBackup] config snapshot ok for ${p.packageName} tag=$tag" }
                 } else {
