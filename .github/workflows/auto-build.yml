@@ -1,0 +1,117 @@
+name: 🛠️ 自动构建 (Auto Build)
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build:
+    name: 📦 构建 APK (Build APK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      VERSION_NAME: '3.0.1-Rustic-JNI'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/source/native/src/main/jni/external/rustic/rustic/target
+    steps:
+      - name: 检出代码 (Checkout)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: 安装 Java (Install Java)
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: 配置 Gradle (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: 安装 Rust (Install Rust)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: 缓存 Rust 构建 (Cache Rust Build)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: source/native/src/main/jni/external/rustic/rustic
+
+      - name: 安装 Go (Install Go)
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.7'
+          cache-dependency-path: source/native/src/main/jni/external/rclone/rclone/go.sum
+
+      - name: 安装 gomobile (Install gomobile)
+        run: |
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260709172247-6129f5bee9d5
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20260709172247-6129f5bee9d5
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/gomobile" init
+
+      - name: 计算版本号 (Calculate Version)
+        id: version
+        run: echo "code=$((30000 + $(git rev-list --count HEAD)))" >> "$GITHUB_OUTPUT"
+
+      - name: 准备签名密钥 (Prepare Signing Keystore)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          SECRET_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          SECRET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          KEYSTORE="$RUNNER_TEMP/keystore.jks"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "使用仓库 Secrets 中的签名密钥"
+            echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+            STORE_PASSWORD="$SECRET_STORE_PASSWORD"
+            KEY_ALIAS="$SECRET_KEY_ALIAS"
+            KEY_PASSWORD="$SECRET_KEY_PASSWORD"
+          else
+            echo "::warning::未配置 KEYSTORE_BASE64，使用临时生成的签名密钥（每次构建签名不同，无法覆盖安装）"
+            STORE_PASSWORD="android"
+            KEY_ALIAS="temp"
+            KEY_PASSWORD="android"
+            keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 \
+              -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Temp CI"
+          fi
+          {
+            echo "STORE_FILE=$KEYSTORE"
+            echo "STORE_PASSWORD=$STORE_PASSWORD"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: 授予 Gradle Wrapper 执行权限 (Grant Gradle Wrapper Execute Permission)
+        working-directory: source
+        run: chmod +x gradlew
+
+      - name: 运行 build 构建 (Run Gradle Build)
+        working-directory: source
+        run: >-
+          ./gradlew assembleArm64-v8aFossRelease
+          -PtargetAbi=arm64-v8a
+          -PversionCode=${{ steps.version.outputs.code }}
+          -PversionName="$VERSION_NAME"
+          --parallel --build-cache
+
+      - name: 整理构建产物 (Prepare Build Artifacts)
+        run: |
+          mkdir -p build-output
+          find source/app/build/outputs/apk -name "*.apk" -exec mv {} build-output/ \;
+          ls -l build-output
+          [ "$(ls build-output/*.apk | wc -l)" -eq 1 ]
+          echo "APK_PATH=$(ls build-output/*.apk)" >> "$GITHUB_ENV"
+
+      - name: 上传构建产物 (Upload Build Artifacts)
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.APK_PATH }}
+          archive: false
+          if-no-files-found: error

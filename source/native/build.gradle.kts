@@ -14,12 +14,24 @@ val rcloneExtractDir = layout.buildDirectory.dir("rclone/extracted")
 
 val isWindows = System.getProperty("os.name").lowercase().contains("windows")
 
+// 可选：-PtargetAbi=arm64-v8a 只编译单个 ABI（CI 用），不传则保持编全 4 个 ABI
+val targetAbi = (findProperty("targetAbi") as String?)?.takeIf { it.isNotBlank() }
+val gomobileTargets = when (targetAbi) {
+    null -> "android/arm64,android/arm,android/amd64,android/386"
+    "arm64-v8a" -> "android/arm64"
+    "armeabi-v7a" -> "android/arm"
+    "x86_64" -> "android/amd64"
+    "x86" -> "android/386"
+    else -> error("不支持的 targetAbi: $targetAbi")
+}
+
 // 1) 调 gomobile bind 出 AAR（一次编全 4 个 ABI，靠 :app 的 abiFilters 打包时筛）
 val gomobileBindRclone = tasks.register<Exec>("gomobileBindRclone") {
     workingDir = rcloneRepoDir
     // 增量：Go 源与 go.mod 不变则 up-to-date 跳过（bind 很慢）
     inputs.dir(File(rcloneRepoDir, "librclone"))
     inputs.file(File(rcloneRepoDir, "go.mod"))
+    inputs.property("gomobileTargets", gomobileTargets)
     val aarFile = rcloneAar.get().asFile
     outputs.file(aarFile)
 
@@ -31,7 +43,7 @@ val gomobileBindRclone = tasks.register<Exec>("gomobileBindRclone") {
         "-trimpath",
         "-ldflags", "-s -w",
         "-androidapi", "26",
-        "-target=android/arm64,android/arm,android/amd64,android/386",
+        "-target=$gomobileTargets",
         "-javapkg=org.rclone",
         "-o", rcloneAar.get().asFile.absolutePath,
         "github.com/rclone/rclone/librclone/gomobile"
@@ -53,6 +65,11 @@ android {
     ndkVersion = "25.2.9519653"
 
     defaultConfig {
+        if (targetAbi != null) {
+            ndk {
+                abiFilters += targetAbi
+            }
+        }
         // 让 CMake 通过 ccache 做编译器缓存，加速 C/C++（tar/zstd/nativelib/rustic-jni 锚点）二次构建。
         // 仅当 PATH 中存在 ccache 时才注入 launcher，避免本地无 ccache 环境构建失败。
         val hasCcache = System.getenv("PATH")
