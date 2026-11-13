@@ -60,33 +60,13 @@ jobs:
 
       - name: 准备签名密钥 (Prepare Signing Keystore)
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          SECRET_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          SECRET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ANDROID_JKS_BASE64: ${{ secrets.ANDROID_JKS_BASE64 }}
         run: |
-          KEYSTORE="$RUNNER_TEMP/keystore.jks"
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "使用仓库 Secrets 中的签名密钥"
-            echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
-            STORE_PASSWORD="$SECRET_STORE_PASSWORD"
-            KEY_ALIAS="$SECRET_KEY_ALIAS"
-            KEY_PASSWORD="$SECRET_KEY_PASSWORD"
-          else
-            echo "::warning::未配置 KEYSTORE_BASE64，使用临时生成的签名密钥（每次构建签名不同，无法覆盖安装）"
-            STORE_PASSWORD="android"
-            KEY_ALIAS="temp"
-            KEY_PASSWORD="android"
-            keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 \
-              -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" -alias "$KEY_ALIAS" \
-              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Temp CI"
+          if [ -z "$ANDROID_JKS_BASE64" ]; then
+            echo "::error::未配置 ANDROID_JKS_BASE64，无法签名"
+            exit 1
           fi
-          {
-            echo "STORE_FILE=$KEYSTORE"
-            echo "STORE_PASSWORD=$STORE_PASSWORD"
-            echo "KEY_ALIAS=$KEY_ALIAS"
-            echo "KEY_PASSWORD=$KEY_PASSWORD"
-          } >> "$GITHUB_ENV"
+          echo "$ANDROID_JKS_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
 
       - name: 授予 Gradle Wrapper 执行权限 (Grant Gradle Wrapper Execute Permission)
         working-directory: source
@@ -94,6 +74,11 @@ jobs:
 
       - name: 运行 build 构建 (Run Gradle Build)
         working-directory: source
+        env:
+          STORE_FILE: ${{ runner.temp }}/release.jks
+          STORE_PASSWORD: ${{ secrets.ANDROID_JKS_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_NAME }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: >-
           ./gradlew assembleArm64-v8aFossRelease
           -PtargetAbi=arm64-v8a
