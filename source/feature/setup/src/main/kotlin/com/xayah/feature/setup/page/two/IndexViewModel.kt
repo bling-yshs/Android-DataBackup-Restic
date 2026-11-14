@@ -41,7 +41,8 @@ data object IndexUiState : UiState
 
 sealed class IndexUiIntent : UiIntent {
     data class ToMain(val context: Activity) : IndexUiIntent()
-    data class Initialize(val password: String) : IndexUiIntent()
+    /** [parentDir] 为空表示用默认目录；否则在该目录下创建 restic_repo。 */
+    data class Initialize(val password: String, val parentDir: String = "") : IndexUiIntent()
     data class OpenExisting(val repoPath: String, val password: String) : IndexUiIntent()
 
     /**
@@ -124,7 +125,7 @@ class IndexViewModel @Inject constructor(
             }
 
             is IndexUiIntent.Initialize -> {
-                setupBackupDirAndRepository(intent.password)
+                setupBackupDirAndRepository(intent.password, intent.parentDir)
             }
 
             is IndexUiIntent.OpenExisting -> {
@@ -137,7 +138,7 @@ class IndexViewModel @Inject constructor(
         }
     }
 
-    private suspend fun setupBackupDirAndRepository(password: String) {
+    private suspend fun setupBackupDirAndRepository(password: String, parentDir: String) {
         // 已可用则不再重复执行；"进行中"交给 inFlight 判定
         if (_initializationState.value is InitializationState.ReadyToUse) return
 
@@ -145,7 +146,7 @@ class IndexViewModel @Inject constructor(
         // rustic_core 的 init 对已存在 config 的仓库只会返回 Configuration 错误（"Config file already exists"），
         // 用户看到的是一条底层英文报错，以为仓库被弄坏了；这里直接按"打开已有仓库"处理，
         // 语义也更准确：压缩档位只在建库时写进 config，已有仓库无论如何都不会因新推荐值改变。
-        val existing = probeExistingRepository()
+        val existing = probeExistingRepository(parentDir)
         if (existing != null) {
             Log.i(TAG, "setup: repository already exists at $existing, open instead of init")
             openExistingRepository(existing, password)
@@ -163,10 +164,17 @@ class IndexViewModel @Inject constructor(
                 }
 
                 // b) Restic 仓库：独立目录 /storage/emulated/0/DataBackupRustic/restic_repo
-                val repoPath = File(ConstantUtil.DEFAULT_RUSTIC_REPO_ROOT, RESTIC_REPO_DIR_NAME).absolutePath
+                val repoPath = newRepoPathOf(parentDir)
                 val pwd = password.ifBlank { DEFAULT_RESTIC_PASSWORD }
 
                 _initializationState.value = InitializationState.Initializing
+                // 自选目录时目标目录可能已有别的文件：建库会把仓库文件和它们混在一起，直接拒绝
+                if (parentDir.isNotBlank() && rootService.listFilePaths(repoPath).isNotEmpty()) {
+                    Log.e(TAG, "setup: target dir not empty -> $repoPath")
+                    _initializationState.value =
+                        InitializationState.Error(context.getString(R.string.setup_repo_target_not_empty, repoPath))
+                    return@withContext
+                }
                 createDirWithPermissions(repoPath)
 
                 val initResult = resticRepo.initRepository(repoPath, pwd)
@@ -227,11 +235,19 @@ class IndexViewModel @Inject constructor(
      *   2. 新建模式的固定目标目录 DEFAULT_RUSTIC_REPO_ROOT/restic_repo
      * 两者都命中时优先已记录路径：用户此前选定的位置比默认位置更权威。
      */
-    suspend fun probeExistingRepository(): String? = withContext(Dispatchers.IO) {
+    suspend fun probeExistingRepository(parentDir: String = ""): String? = withContext(Dispatchers.IO) {
+        if (parentDir.isNotBlank()) {
+            // 用户明确自选了目录：只看这个目录本身和它下面的 restic_repo，不再回退到已记录/默认仓库
+            return@withContext listOf(parentDir, newRepoPathOf(parentDir)).firstOrNull { isRepository(it) }
+        }
         val saved = context.readResticRepoPath()
-        val defaultPath = File(ConstantUtil.DEFAULT_RUSTIC_REPO_ROOT, RESTIC_REPO_DIR_NAME).absolutePath
+        val defaultPath = newRepoPathOf("")
         listOfNotNull(saved, defaultPath).distinct().firstOrNull { isRepository(it) }
     }
+
+    /** 新建仓库的目标目录：自选目录（为空则默认目录）下的 restic_repo。 */
+    fun newRepoPathOf(parentDir: String): String =
+        File(parentDir.ifBlank { ConstantUtil.DEFAULT_RUSTIC_REPO_ROOT }, RESTIC_REPO_DIR_NAME).absolutePath
 
     /**
      * 打开已有仓库模式：用户选中从旧设备完整复制过来的仓库目录（或它的上一层），此处只做只读校验（exists → validate → check），

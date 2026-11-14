@@ -39,6 +39,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import com.xayah.core.util.toFriendlyMessage
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 data object ResticUiState : UiState
@@ -735,6 +737,106 @@ class ResticViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "saveRepoConfigId: 读取 config_id 失败", e)
         }
+    }
+
+    // --- 移动本地仓库到新位置 ---
+    sealed class MoveState {
+        data object Idle : MoveState()
+        data object Moving : MoveState()
+        data class Done(val repoPath: String) : MoveState()
+        data class Error(val message: String) : MoveState()
+    }
+
+    private val _moveState = MutableStateFlow<MoveState>(MoveState.Idle)
+    val moveState: StateFlow<MoveState> = _moveState.asStateFlow()
+    private val moveInFlight = AtomicBoolean(false)
+
+    fun resetMoveState() {
+        if (_moveState.value !is MoveState.Moving) _moveState.value = MoveState.Idle
+    }
+
+    /** 移动后的目标仓库目录：选中目录本身就叫 restic_repo 时直接用它，否则用其下的 restic_repo。 */
+    fun moveTargetOf(selectedDir: String): String {
+        val parent = selectedDir.trim().trimEnd('/')
+        return if (File(parent).name == RESTIC_REPO_DIR_NAME) parent else "$parent/$RESTIC_REPO_DIR_NAME"
+    }
+
+    /**
+     * 把当前本地仓库整体移动到 [selectedDir] 下。
+     * 同一分区直接改名（瞬间完成）；跨分区则先完整复制并校验，通过后才切换路径并删除旧目录，
+     * 任一步失败都保留旧仓库不动。
+     */
+    fun moveLocalRepository(selectedDir: String) {
+        if (!moveInFlight.compareAndSet(false, true)) return
+        _moveState.value = MoveState.Moving
+        viewModelScope.launch {
+            // 不可取消：离开页面时若中断在复制中途，会留下一份未登记的半成品
+            val result = withContext(NonCancellable + Dispatchers.IO) {
+                runCatching { doMoveLocalRepository(selectedDir) }.getOrElse {
+                    Log.e(TAG, "moveLocalRepository 异常", it)
+                    MoveState.Error(it.message ?: it.javaClass.simpleName)
+                }
+            }
+            _moveState.value = result
+            moveInFlight.set(false)
+            checkResticStatus()
+        }
+    }
+
+    private suspend fun doMoveLocalRepository(selectedDir: String): MoveState {
+        val src = context.readResticRepoPath()?.trimEnd('/')
+        if (src.isNullOrBlank() || !rootService.rusticRepositoryExists(src)) {
+            return MoveState.Error(context.getString(R.string.restic_move_no_repo))
+        }
+        if (!selectedDir.trim().startsWith("/")) {
+            return MoveState.Error(context.getString(R.string.restic_move_invalid_target))
+        }
+        val dst = moveTargetOf(selectedDir)
+        if (dst == src) return MoveState.Error(context.getString(R.string.restic_move_same_path))
+        if ("$dst/".startsWith("$src/")) return MoveState.Error(context.getString(R.string.restic_move_inside_self))
+        if (rootService.exists(dst) && rootService.listFilePaths(dst).isNotEmpty()) {
+            return MoveState.Error(context.getString(R.string.restic_move_target_not_empty, dst))
+        }
+        val password = readPasswordFor(src)
+        val dstParent = File(dst).parent ?: return MoveState.Error(context.getString(R.string.restic_move_invalid_target))
+        rootService.mkdirs(dstParent)
+
+        // 1) 同一分区：直接改名
+        if (rootService.renameTo(src, dst)) {
+            if (rootService.rusticRepositoryExists(dst)) {
+                context.saveResticRepoPath(dst)
+                _repoPathState.value = dst
+                Log.i(TAG, "moveLocalRepository: renamed $src -> $dst")
+                return MoveState.Done(dst)
+            }
+            // 改名后认不出仓库：尽力改回去
+            rootService.renameTo(dst, src)
+            return MoveState.Error(context.getString(R.string.restic_move_verify_failed))
+        }
+
+        // 2) 跨分区：复制 → 校验 → 切换路径 → 删除旧目录
+        val size = rootService.calculateSize(src)
+        val available = rootService.readStatFs(dstParent).availableBytes
+        if (available in 1 until size) {
+            return MoveState.Error(context.getString(R.string.restic_move_low_space, size.toDouble().formatSize(), available.toDouble().formatSize()))
+        }
+        val copied = rootService.copyRecursively(src, dst, false)
+        val verified = copied &&
+                rootService.calculateSize(dst) == size &&
+                rootService.rusticRepositoryExists(dst) &&
+                resticRepo.validateRepository(dst, password)
+        if (!verified) {
+            Log.e(TAG, "moveLocalRepository: copy/verify failed, copied=$copied, $src -> $dst")
+            rootService.deleteRecursively(dst)
+            return MoveState.Error(context.getString(R.string.restic_move_verify_failed))
+        }
+        context.saveResticRepoPath(dst)
+        _repoPathState.value = dst
+        if (!rootService.deleteRecursively(src)) {
+            Log.w(TAG, "moveLocalRepository: 旧目录删除失败，需手动清理: $src")
+        }
+        Log.i(TAG, "moveLocalRepository: copied $src -> $dst")
+        return MoveState.Done(dst)
     }
 
     suspend fun getPassword(): String = getResticPassword()

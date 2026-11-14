@@ -146,4 +146,18 @@
     <string name="diagnostic_log_verdict_unknown">未知</string>
     <string name="restore_meta_migration">迁移旧备份数据</string>
     <string name="restore_meta_migration_desc">为旧版本创建的本地备份补上应用版本信息</string>
+    <string name="restic_move_repo">移动仓库到其他位置</string>
+    <string name="restic_move_confirm">将把仓库连同其中全部备份移动到新位置。\n\n当前：%1$s\n目标：%2$s\n\n同一分区内瞬间完成；跨分区需要完整复制，耗时取决于仓库大小。移动期间请勿进行备份或恢复，也不要退出应用。</string>
+    <string name="restic_move_confirm_action">开始移动</string>
+    <string name="restic_move_ok">确定</string>
+    <string name="restic_move_in_progress">正在移动仓库，请勿退出应用…</string>
+    <string name="restic_move_done">仓库已移动到：%1$s</string>
+    <string name="restic_move_failed">移动仓库失败</string>
+    <string name="restic_move_no_repo">当前没有可用的本地仓库</string>
+    <string name="restic_move_invalid_target">目标目录无效</string>
+    <string name="restic_move_same_path">目标位置与当前仓库相同</string>
+    <string name="restic_move_inside_self">不能把仓库移动到它自己的目录里面</string>
+    <string name="restic_move_target_not_empty">目标目录已存在且非空：%1$s</string>
+    <string name="restic_move_low_space">目标分区空间不足。仓库大小：%1$s，可用：%2$s</string>
+    <string name="restic_move_verify_failed">移动后校验未通过，已保留原仓库，未做任何更改</string>
 </resources>

@@ -94,4 +94,8 @@
     <string name="copy">复制</string>
     <string name="copied">已复制到剪贴板</string>
     <string name="restic_existing_repo_warning">特别提示：必须与原有仓库密码一致，否则无法恢复其中备份；若误操作删除仓库，其中的备份将全部删除且无法恢复，请谨慎操作。</string>
+    <string name="setup_new_repo_dir">仓库存放目录</string>
+    <string name="setup_new_repo_dir_default">默认目录</string>
+    <string name="setup_new_repo_dir_desc">轻击可自选目录，应用会在其下创建 restic_repo 文件夹</string>
+    <string name="setup_repo_target_not_empty">目标目录已存在且非空，无法在此创建全新仓库：%1$s</string>
 </resources>

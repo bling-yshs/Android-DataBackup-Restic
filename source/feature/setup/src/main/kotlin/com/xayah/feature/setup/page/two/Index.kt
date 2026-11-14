@@ -109,6 +109,8 @@ fun PageTwo() {
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var isExistingRepo by rememberSaveable { mutableStateOf(false) }
     var selectedRepoPath by rememberSaveable { mutableStateOf("") }
+    // 全新仓库模式下自选的存放目录；为空表示使用默认目录
+    var newRepoParent by rememberSaveable { mutableStateOf("") }
     val isInitialized = initializationState is IndexViewModel.InitializationState.ReadyToUse
     val isInitializing = initializationState is IndexViewModel.InitializationState.Preparing ||
             initializationState is IndexViewModel.InitializationState.Initializing
@@ -261,7 +263,7 @@ fun PageTwo() {
                         // 命中的话弹「将以 Lx 建库」的确认框毫无意义，因为已存在仓库的 config 已经写死，
                         // 新的推荐档位不会生效；而放行 init 只会拿到 rustic_core 的英文报错。
                         scope.launch {
-                            val existing = viewModel.probeExistingRepository()
+                            val existing = viewModel.probeExistingRepository(newRepoParent)
                             if (existing != null) {
                                 adoptingExistingPath = existing
                                 viewModel.emitIntentOnIO(
@@ -364,7 +366,7 @@ fun PageTwo() {
                 },
                 // 初始化完成后 value 已是真实仓库路径，若再展示默认路径会变成两行重复内容
                 desc = if (initializationState is IndexViewModel.InitializationState.ReadyToUse) null
-                else ConstantUtil.DEFAULT_RUSTIC_REPO_ROOT + "/restic_repo",
+                else viewModel.newRepoPathOf(newRepoParent),
                 enabled = false
             ) {}
 
@@ -387,6 +389,20 @@ fun PageTwo() {
                             selected = isExistingRepo == (index == 1)
                         ) {
                             Text(text = label)
+                        }
+                    }
+                }
+
+                // 全新仓库：可自选存放目录，应用在其下创建 restic_repo；不选则用默认目录
+                AnimatedVisibility(visible = isExistingRepo.not()) {
+                    Clickable(
+                        title = stringResource(id = R.string.setup_new_repo_dir),
+                        value = newRepoParent.ifEmpty { stringResource(id = R.string.setup_new_repo_dir_default) },
+                        desc = stringResource(id = R.string.setup_new_repo_dir_desc),
+                        enabled = isInitialized.not() && isInitializing.not(),
+                    ) {
+                        directoryLauncher.launch(context) { pathString ->
+                            newRepoParent = pathString
                         }
                     }
                 }
@@ -666,7 +682,7 @@ fun PageTwo() {
                         if (levelToApply != null) {
                             context.saveResticCompressionLevel(levelToApply)
                         }
-                        viewModel.emitIntent(IndexUiIntent.Initialize(password = effectivePassword))
+                        viewModel.emitIntent(IndexUiIntent.Initialize(password = effectivePassword, parentDir = newRepoParent))
                     }
                 }) {
                     Text(text = stringResource(id = R.string.setup_init_confirm_action))

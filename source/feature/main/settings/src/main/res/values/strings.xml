@@ -148,4 +148,18 @@
     <string name="diagnostic_log_verdict_unknown">Unknown</string>
     <string name="restore_meta_migration">Migrate old backups</string>
     <string name="restore_meta_migration_desc">Add the app version to local backups made by older versions</string>
+    <string name="restic_move_repo">Move repository to another location</string>
+    <string name="restic_move_confirm">The repository and all backups in it will be moved.\n\nCurrent: %1$s\nTarget: %2$s\n\nThis is instant within the same partition; across partitions a full copy is needed and the time depends on the repository size. Do not back up, restore or leave the app while moving.</string>
+    <string name="restic_move_confirm_action">Move</string>
+    <string name="restic_move_ok">OK</string>
+    <string name="restic_move_in_progress">Moving the repository, do not leave the app…</string>
+    <string name="restic_move_done">Repository moved to: %1$s</string>
+    <string name="restic_move_failed">Failed to move the repository</string>
+    <string name="restic_move_no_repo">There is no usable local repository</string>
+    <string name="restic_move_invalid_target">Invalid target directory</string>
+    <string name="restic_move_same_path">The target is the same as the current repository</string>
+    <string name="restic_move_inside_self">The repository cannot be moved into its own directory</string>
+    <string name="restic_move_target_not_empty">The target directory already exists and is not empty: %1$s</string>
+    <string name="restic_move_low_space">Not enough space on the target partition. Repository size: %1$s, available: %2$s</string>
+    <string name="restic_move_verify_failed">Verification failed after moving; the original repository is kept unchanged</string>
 </resources>

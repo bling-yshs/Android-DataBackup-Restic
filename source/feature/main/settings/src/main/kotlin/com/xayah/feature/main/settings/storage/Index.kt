@@ -13,7 +13,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import com.xayah.libpickyou.PickYouLauncher
+import com.xayah.libpickyou.ui.model.PermissionType
+import com.xayah.libpickyou.ui.model.PickerType
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +77,29 @@ fun PageStorageStats(isOtg: Boolean = false) {
     val cacheInfo by cacheViewModel.cacheInfo.collectAsStateWithLifecycle()
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
+
+    // --- 移动本地仓库到新位置 ---
+    val moveState by resticViewModel.moveState.collectAsStateWithLifecycle()
+    val isMoving = moveState is ResticViewModel.MoveState.Moving
+    var pendingMoveDir by rememberSaveable { mutableStateOf("") }
+    val moveDirLauncher = PickYouLauncher(
+        checkPermission = false,
+        title = stringResource(id = R.string.select_directory),
+        pickerType = PickerType.DIRECTORY,
+        permissionType = PermissionType.ROOT,
+    )
+    MoveRepoDialogs(
+        moveState = moveState,
+        currentPath = localRepoPath ?: "",
+        targetPath = if (pendingMoveDir.isEmpty()) "" else resticViewModel.moveTargetOf(pendingMoveDir),
+        onConfirm = {
+            val dir = pendingMoveDir
+            pendingMoveDir = ""
+            resticViewModel.moveLocalRepository(dir)
+        },
+        onCancel = { pendingMoveDir = "" },
+        onResultDismiss = { resticViewModel.resetMoveState() },
+    )
 
     LaunchedEffect(Unit) {
         if (isOtg) resticViewModel.refreshOtgStatus()
@@ -118,6 +155,21 @@ fun PageStorageStats(isOtg: Boolean = false) {
                     ) {
                         Text(stringResource(id = R.string.storage_reselect_and_reinit))
                     }
+                    // 仅本地：把现有仓库连同全部备份整体移到别的目录
+                    if (!isOtg && resticInitialized && !repoPath.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            enabled = !isMoving,
+                            onClick = {
+                                moveDirLauncher.launch(context) { pathString ->
+                                    pendingMoveDir = pathString
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(id = R.string.restic_move_repo))
+                        }
+                    }
                 }
             }
 
@@ -158,5 +210,65 @@ fun PageStorageStats(isOtg: Boolean = false) {
                 }
             }
         }
+    }
+}
+
+/** 移动仓库的三类弹窗：确认、进行中（不可关闭）、结果。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoveRepoDialogs(
+    moveState: ResticViewModel.MoveState,
+    currentPath: String,
+    targetPath: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    onResultDismiss: () -> Unit,
+) {
+    if (targetPath.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = onCancel,
+            title = { Text(stringResource(id = R.string.restic_move_repo)) },
+            text = { Text(stringResource(id = R.string.restic_move_confirm, currentPath, targetPath)) },
+            confirmButton = {
+                TextButton(onClick = onConfirm) { Text(stringResource(id = R.string.restic_move_confirm_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancel) { Text(stringResource(id = R.string.cancel)) }
+            },
+        )
+    }
+    when (moveState) {
+        ResticViewModel.MoveState.Moving -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text(stringResource(id = R.string.restic_move_repo)) },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(stringResource(id = R.string.restic_move_in_progress))
+                }
+            },
+            confirmButton = {},
+        )
+
+        is ResticViewModel.MoveState.Done -> AlertDialog(
+            onDismissRequest = onResultDismiss,
+            title = { Text(stringResource(id = R.string.restic_move_repo)) },
+            text = { Text(stringResource(id = R.string.restic_move_done, moveState.repoPath)) },
+            confirmButton = {
+                TextButton(onClick = onResultDismiss) { Text(stringResource(id = R.string.restic_move_ok)) }
+            },
+        )
+
+        is ResticViewModel.MoveState.Error -> AlertDialog(
+            onDismissRequest = onResultDismiss,
+            title = { Text(stringResource(id = R.string.restic_move_failed)) },
+            text = { Text(moveState.message) },
+            confirmButton = {
+                TextButton(onClick = onResultDismiss) { Text(stringResource(id = R.string.restic_move_ok)) }
+            },
+        )
+
+        ResticViewModel.MoveState.Idle -> {}
     }
 }

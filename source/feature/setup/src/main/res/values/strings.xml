@@ -94,4 +94,8 @@
     <string name="copy">Copy</string>
     <string name="copied">Copied to clipboard</string>
     <string name="restic_existing_repo_warning">The password must be identical to the original repository, otherwise its backups cannot be restored. If the repository is deleted by mistake, all backups inside it are lost permanently. Please operate with caution.</string>
+    <string name="setup_new_repo_dir">Repository location</string>
+    <string name="setup_new_repo_dir_default">Default directory</string>
+    <string name="setup_new_repo_dir_desc">Tap to pick a directory; a restic_repo folder will be created inside it</string>
+    <string name="setup_repo_target_not_empty">The target directory already exists and is not empty, a new repository cannot be created here: %1$s</string>
 </resources>
